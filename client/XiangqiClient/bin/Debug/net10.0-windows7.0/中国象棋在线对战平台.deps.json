@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "中国象棋在线对战平台/2.0.0": {
+        "runtime": {
+          "中国象棋在线对战平台.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "中国象棋在线对战平台/2.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

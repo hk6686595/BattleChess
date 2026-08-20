@@ -1,0 +1,159 @@
+<UserControl x:Class="XiangqiClient.Views.LobbyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Background="#141a28">
+        <!-- 顶栏 -->
+        <Border DockPanel.Dock="Top" Background="#1b2438" Padding="12,8" BorderBrush="#2a3550" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <TextBlock Text="⚔️ 对战平台 · 中国象棋" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="{Binding ConnectText}" Foreground="#37d67a" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding UserBar}" Foreground="#e6ecf5" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Button Content="退出登录" Click="Logout_Click" Style="{StaticResource SmallBtn}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="340"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左：创建/匹配 + 房间列表 -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="#1b2438" Padding="12" CornerRadius="8" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="🎮 中国象棋" FontSize="14" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding RoomNameInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputBox}" ToolTip="房间名（可选）"/>
+                            <TextBox Grid.Column="2" Text="{Binding RoomPasswordInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputBox}" ToolTip="房间密码（可选）"/>
+                            <CheckBox Grid.Column="4" Content="私密" IsChecked="{Binding RoomPrivateInput}"
+                                       Foreground="#8b98b5" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="创建房间" Style="{StaticResource PrimaryBtn}"
+                                    Command="{Binding CreateRoomCmd}"/>
+                            <Button Grid.Column="2" Content="快速加入" Style="{StaticResource Btn}"
+                                    Command="{Binding QuickJoinCmd}"/>
+                            <Button Grid.Column="4" Content="{Binding MatchButtonText}" Style="{StaticResource Btn}"
+                                    Command="{Binding MatchCmd}" ToolTip="匹配模式开发中，敬请期待"/>
+                        </Grid>
+                        <Button Content="🤖 人机对战（和电脑下棋）" Style="{StaticResource Btn}" Margin="0,8,0,0"
+                                Command="{Binding StartAiCmd}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Background="#1b2438" Padding="12" CornerRadius="8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="房间列表" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <ListView x:Name="RoomListView" ItemsSource="{Binding RoomList}" Background="Transparent"
+                                  BorderThickness="0" MouseDoubleClick="RoomList_DoubleClick">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#202a44" CornerRadius="6" Padding="10,6" Margin="0,2">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Meta}" Foreground="#8b98b5" VerticalAlignment="Center"/>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Lock}" Foreground="#ffd54a" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding StatusText}" Foreground="#ffb74d" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Text="{Binding Name}" Foreground="#e6ecf5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- 右：排行榜 + 我的战绩 + 大厅聊天 -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="#1b2438" Padding="12" CornerRadius="8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="🏆 排行榜" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <ListView ItemsSource="{Binding Rankings}" Background="Transparent" BorderThickness="0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,2">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Rating}" Foreground="#ffd54a" FontWeight="Bold"/>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Record}" Foreground="#8b98b5" FontSize="11" Margin="0,0,10,0"/>
+                                        <TextBlock Text="{Binding Medal}" Width="26"/>
+                                        <TextBlock Text="{Binding Name}" Foreground="#e6ecf5" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="2" Background="#1b2438" Padding="12" CornerRadius="8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="📜 我的战绩" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <ListBox x:Name="MyMatchList" ItemsSource="{Binding MyMatches}" Background="Transparent"
+                                 BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Display}" Foreground="#c8d3e8" FontSize="12" TextWrapping="Wrap"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="4" Background="#1b2438" Padding="12" CornerRadius="8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="💬 大厅聊天" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <ListBox x:Name="LobbyChatList" ItemsSource="{Binding LobbyChats}" Background="Transparent"
+                                 BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ItemTemplate="{StaticResource ChatBubbleTemplate}"/>
+                        <!-- 右底部固定输入框 -->
+                        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                            <Button DockPanel.Dock="Right" Content="发送" Style="{StaticResource PrimaryBtn}" Width="64"
+                                    Margin="8,0,0,0" Command="{Binding SendLobbyChatCmd}"/>
+                            <TextBox Text="{Binding LobbyChatInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ChatInputBox}" KeyDown="LobbyChat_KeyDown"/>
+                        </DockPanel>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

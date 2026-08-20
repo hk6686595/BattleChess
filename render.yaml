@@ -1,0 +1,16 @@
+# Render Blueprint：一键部署对战平台（免费计划）
+# 用法：推送到 GitHub 后，在 Render 选择 Blueprint 并指定本仓库
+services:
+  - type: web
+    name: battle-platform
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: MOVE_TIME_LIMIT
+        value: "60"
+      - key: AI_THINK_MS
+        value: "1500"

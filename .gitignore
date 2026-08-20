@@ -1,0 +1,7 @@
+# 数据与依赖（自动生成）
+node_modules/
+data/
+logs/
+
+# 日志
+*.log

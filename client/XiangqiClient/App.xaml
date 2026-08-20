@@ -1,0 +1,157 @@
+<Application x:Class="XiangqiClient.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:XiangqiClient.Converters"
+             xmlns:models="clr-namespace:XiangqiClient.Models"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <conv:OwnerConverter x:Key="OwnerConverter"/>
+        <conv:ReadyConverter x:Key="ReadyConverter"/>
+        <conv:BoolToVisConverter x:Key="BoolToVisConverter"/>
+        <conv:BoolToAlignConverter x:Key="ChatAlignConverter"/>
+
+        <!-- 聊天气泡模板（大厅 / 房间共用） -->
+        <DataTemplate x:Key="ChatBubbleTemplate" DataType="{x:Type models:ChatMessage}">
+            <StackPanel Margin="0,3" HorizontalAlignment="{Binding IsMine, Converter={StaticResource ChatAlignConverter}}">
+                <!-- 系统消息：居中灰字 -->
+                <TextBlock Text="{Binding Display}" Foreground="#8b98b5" FontSize="12"
+                           HorizontalAlignment="Center" TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSystem}" Value="False">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <!-- 普通消息气泡 -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSystem}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <DockPanel>
+                        <!-- 发送者头像圆点 -->
+                        <Ellipse DockPanel.Dock="Left" Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Top">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#4a5a85"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                            <Setter Property="Fill" Value="#4f8cff"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                            <Ellipse.RenderTransform>
+                                <TranslateTransform Y="2"/>
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                        <Border CornerRadius="10,10,10,2" Padding="10,6" MaxWidth="250" Background="#2b3a5e"
+                                HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#2b3a5e"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMine}" Value="True">
+                                            <Setter Property="Background" Value="#3a6fd8"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding From}" Foreground="#b9c8ea" FontSize="11" FontWeight="SemiBold"/>
+                                    <TextBlock Text=" · " Foreground="#7d8db5" FontSize="11"/>
+                                    <TextBlock Text="{Binding TimeText}" Foreground="#7d8db5" FontSize="10"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Text}" Foreground="White" FontSize="13" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </DockPanel>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <Style x:Key="InputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#2a3550"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="InputBoxPass" TargetType="PasswordBox">
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#2a3550"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Background" Value="#26335a"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#32426f"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="#4f8cff"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#6ba0ff"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DangerBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="#7a2424"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#9a3030"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SmallBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- 聊天输入框：右底部固定、更大更醒目 -->
+        <Style x:Key="ChatInputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#141a28"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MinHeight" Value="36"/>
+        </Style>
+    </Application.Resources>
+</Application>

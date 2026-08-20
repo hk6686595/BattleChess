@@ -1,0 +1,19 @@
+{
+  "name": "battle-platform-server",
+  "version": "2.0.0",
+  "description": "联网对战游戏平台服务器：中国象棋 + WPF 客户端",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node test/xiangqi.test.js && node test/xiangqi-ai.test.js && node test/eleeye.test.js && node test/room.test.js && node test/e2e.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "license": "MIT"
+}
