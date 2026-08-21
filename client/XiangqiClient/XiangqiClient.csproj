@@ -21,7 +21,6 @@
     <Resource Include="Assets\check.wav" />
     <Resource Include="Assets\mate.wav" />
     <Resource Include="Assets\bgm.mp3" />
-    <Resource Include="Assets\bgm.wav" />
   </ItemGroup>
 
 </Project>

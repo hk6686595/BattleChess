@@ -520,6 +520,40 @@ async function testAdminUsers() {
 
   const delMissing = await fetch(`${HTTP_URL}/api/admin/users?id=99999999`, { method: 'DELETE' }).then((r) => r.json());
   ok('删除不存在的用户返回错误', delMissing.ok !== true, delMissing.message || '');
+
+  const batchNames = [randName('批删A'), randName('批删B'), randName('批删C')];
+  const batchUsers = [];
+  for (const n of batchNames) {
+    const r = await fetch(`${HTTP_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: n, password: 'pass1234' }),
+    }).then((x) => x.json());
+    batchUsers.push(r.user);
+  }
+  ok('批量删除前创建 3 个用户', batchUsers.every((u) => u?.id), JSON.stringify(batchUsers));
+
+  const batchDel = await fetch(`${HTTP_URL}/api/admin/users`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: [batchUsers[0].id, batchUsers[1].id, '99999999'] }),
+  }).then((r) => r.json());
+  ok('JSON 批量删除部分成功',
+    batchDel.ok === true && batchDel.deleted?.length === 2 && Array.isArray(batchDel.notFound) && batchDel.notFound.includes('99999999'),
+    JSON.stringify(batchDel));
+
+  const viaQuery = await fetch(`${HTTP_URL}/api/admin/users?ids=${encodeURIComponent(batchUsers[2].id)}`, {
+    method: 'DELETE',
+  }).then((r) => r.json());
+  ok('ids 查询参数删除成功',
+    viaQuery.ok === true && viaQuery.deleted?.some((d) => String(d.id) === String(batchUsers[2].id)),
+    JSON.stringify(viaQuery));
+
+  const stillThere = await fetch(`${HTTP_URL}/api/admin/users?search=${encodeURIComponent(batchNames[0])}`).then((r) => r.json());
+  ok('批量删除后账号不再出现在列表', (stillThere.users || []).every((u) => !batchNames.includes(u.name)), JSON.stringify(stillThere));
+
+  const noId = await fetch(`${HTTP_URL}/api/admin/users`, { method: 'DELETE' }).then((r) => r.json());
+  ok('缺少 id 时删除被拒绝', noId.ok !== true, noId.message || '');
 }
 
 async function main() {

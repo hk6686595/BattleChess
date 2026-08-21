@@ -244,11 +244,37 @@ export function adminCreateUser(name, password) {
 
 /** 管理后台：删除用户（正式/游客均可；保留其历史对局记录，账号随即无法登录） */
 export function adminDeleteUser(userId) {
-  const u = store.data.users[userId];
-  if (!u) return { error: 'NOT_FOUND', message: '用户不存在' };
-  revokeAllTokens(userId); // 使该账号全部会话令牌立即失效
-  store.deleteUser(userId);
-  return { ok: true, id: u.id, name: u.name, isGuest: u.isGuest };
+  const result = adminDeleteUsers([userId]);
+  if (result.error) return result;
+  const d = result.deleted[0];
+  return { ok: true, id: d.id, name: d.name, isGuest: d.isGuest };
+}
+
+const MAX_BATCH_DELETE = 200;
+
+/** 管理后台：批量删除用户（去重；部分不存在时仍删除其余账号） */
+export function adminDeleteUsers(userIds) {
+  const ids = [...new Set((userIds || []).map((id) => String(id).trim()).filter(Boolean))];
+  if (ids.length === 0) return { error: 'BAD_REQUEST', message: '缺少用户 id' };
+  if (ids.length > MAX_BATCH_DELETE) {
+    return { error: 'BAD_REQUEST', message: `单次最多删除 ${MAX_BATCH_DELETE} 个用户` };
+  }
+  const deleted = [];
+  const notFound = [];
+  const toDelete = [];
+  for (const id of ids) {
+    const u = store.data.users[id];
+    if (!u) {
+      notFound.push(id);
+      continue;
+    }
+    revokeAllTokens(id);
+    toDelete.push(id);
+    deleted.push({ id: u.id, name: u.name, isGuest: u.isGuest });
+  }
+  if (toDelete.length) store.deleteUsers(toDelete);
+  if (deleted.length === 0) return { error: 'NOT_FOUND', message: '用户不存在' };
+  return { ok: true, deleted, notFound };
 }
 
 /** 管理后台：用户列表（昵称搜索 + 分页，注册时间倒序） */

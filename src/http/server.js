@@ -70,6 +70,19 @@ async function readBody(req) {
   }
 }
 
+/** 从 query (?id= / ?ids=1,2) 与 JSON body 收集待删除用户 id（去重） */
+function collectUserIds(url, body) {
+  const ids = [];
+  const qId = String(url.searchParams.get('id') || '').trim();
+  const qIds = String(url.searchParams.get('ids') || '').trim();
+  if (qId) ids.push(qId);
+  if (qIds) ids.push(...qIds.split(/[,]+/).map((s) => s.trim()).filter(Boolean));
+  const raw = body?.ids ?? body?.id;
+  if (Array.isArray(raw)) ids.push(...raw.map((x) => String(x).trim()).filter(Boolean));
+  else if (raw != null && String(raw).trim()) ids.push(String(raw).trim());
+  return [...new Set(ids)];
+}
+
 async function handleApi(req, res, url, server) {
   const p = url.pathname.replace(/^\/api/, '') || '/';
   const rooms = server?.rooms ?? null;
@@ -123,15 +136,21 @@ async function handleApi(req, res, url, server) {
     return json(res, 200, { ok: true, user });
   }
   if (p === '/admin/users' && req.method === 'DELETE') {
-    // 管理后台：删除用户（?id=xxx）
-    const id = String(url.searchParams.get('id') || '').trim();
-    if (!id) return json(res, 400, { error: 'BAD_REQUEST', message: '缺少用户 id' });
-    const result = userApi.adminDeleteUser(id);
+    // 管理后台：删除用户（?id= / ?ids=1,2,3 / JSON { ids: [...] }）
+    const body = await readBody(req);
+    const ids = collectUserIds(url, body);
+    if (ids.length === 0) return json(res, 400, { error: 'BAD_REQUEST', message: '缺少用户 id' });
+    const result = userApi.adminDeleteUsers(ids);
     if (result.error) return json(res, 400, { error: result.error, message: result.message });
-    // 该账号在线时立即顶下线，并提示客户端
-    server?.gateway?.kickUserAll(id, '账号已被管理员删除，请重新注册');
-    logger.info('admin', '管理员删除用户', { userId: id, name: result.name, isGuest: result.isGuest });
-    return json(res, 200, { ok: true });
+    for (const d of result.deleted) {
+      server?.gateway?.kickUserAll(d.id, '账号已被管理员删除，请重新注册');
+    }
+    logger.info('admin', '管理员删除用户', {
+      count: result.deleted.length,
+      users: result.deleted.map((d) => ({ userId: d.id, name: d.name, isGuest: d.isGuest })),
+      notFound: result.notFound,
+    });
+    return json(res, 200, { ok: true, deleted: result.deleted, notFound: result.notFound });
   }
   if (p === '/admin/matches' && req.method === 'GET') {
     const page = Math.max(1, Number(url.searchParams.get('page') || 1));

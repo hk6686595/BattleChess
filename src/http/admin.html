@@ -22,9 +22,15 @@
   .toolbar input:focus { border-color: var(--accent); }
   button { background: #26335a; border: 1px solid #3a4a78; color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
   button:hover { background: #32426f; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:disabled:hover { background: #26335a; }
   button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
   button.del { background: #4a2330; border-color: #7a3a4a; }
   button.del:hover { background: #6a3040; }
+  button.del:disabled:hover { background: #4a2330; }
+  .chk { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  th.col-chk, td.col-chk { width: 36px; text-align: center; padding-left: 10px; padding-right: 4px; }
+  tr.picked td { background: #243056; }
   #msg { font-size: 13px; }
   #msg.ok { color: var(--ok); }
   #msg.err { color: var(--err); }
@@ -68,6 +74,7 @@
     <input id="search" type="text" placeholder="按昵称搜索用户…" style="flex:1; max-width:320px;">
     <button id="btnRefresh">🔄 刷新</button>
     <button id="btnCreateUser">＋ 创建用户</button>
+    <button id="btnBatchDelete" class="del" disabled>🗑 删除所选</button>
     <button id="btnExport" class="primary">⬇ 导出 CSV</button>
     <span id="totalInfo" style="color:var(--dim); font-size:13px;"></span>
     <span id="msg"></span>
@@ -84,6 +91,7 @@
   <div id="usersView">
     <table>
       <thead><tr>
+        <th class="col-chk"><input id="chkAll" class="chk" type="checkbox" title="全选本页"></th>
         <th>ID</th><th>昵称</th><th>类型</th><th>积分</th><th>胜</th><th>负</th><th>平</th>
         <th>注册时间</th><th>最后在线</th><th>操作</th>
       </tr></thead>
@@ -144,8 +152,9 @@ async function loadList() {
     $('pageInfo').textContent = `第 ${data.page} / ${pages} 页`;
     if (view === 'users') {
       $('userRows').innerHTML = data.users.length === 0
-        ? '<tr><td colspan="10" class="empty">暂无数据</td></tr>'
+        ? '<tr><td colspan="11" class="empty">暂无数据</td></tr>'
         : data.users.map(u => `<tr>
+            <td class="col-chk"><input class="chk row-chk" type="checkbox" data-id="${u.id}" data-name="${esc(u.name)}"></td>
             <td>${u.id}</td>
             <td><b>${esc(u.name)}</b></td>
             <td><span class="tag ${u.isGuest ? 'guest' : 'reg'}">${u.isGuest ? '游客' : '正式'}</span></td>
@@ -157,6 +166,7 @@ async function loadList() {
             <td>${fmt(u.lastSeen)}</td>
             <td><button class="del" data-id="${u.id}" data-name="${esc(u.name)}">删除</button></td>
           </tr>`).join('');
+      syncSelectionUi();
     } else {
       $('matchRows').innerHTML = data.matches.length === 0
         ? '<tr><td colspan="8" class="empty">暂无对局</td></tr>'
@@ -190,8 +200,21 @@ $('search').addEventListener('input', e => {
   debounce = setTimeout(() => { search = e.target.value.trim(); page = 1; loadList(); }, 300);
 });
 
-$('tabUsers').onclick = () => { view = 'users'; page = 1; $('tabUsers').classList.add('active'); $('tabMatches').classList.remove('active'); $('usersView').style.display = ''; $('matchesView').style.display = 'none'; reload(); };
-$('tabMatches').onclick = () => { view = 'matches'; page = 1; $('tabMatches').classList.add('active'); $('tabUsers').classList.remove('active'); $('matchesView').style.display = ''; $('usersView').style.display = 'none'; reload(); };
+$('tabUsers').onclick = () => {
+  view = 'users'; page = 1;
+  $('tabUsers').classList.add('active'); $('tabMatches').classList.remove('active');
+  $('usersView').style.display = ''; $('matchesView').style.display = 'none';
+  $('btnCreateUser').style.display = ''; $('btnBatchDelete').style.display = '';
+  reload();
+};
+$('tabMatches').onclick = () => {
+  view = 'matches'; page = 1;
+  $('tabMatches').classList.add('active'); $('tabUsers').classList.remove('active');
+  $('matchesView').style.display = ''; $('usersView').style.display = 'none';
+  $('btnCreateUser').style.display = 'none'; $('btnBatchDelete').style.display = 'none';
+  $('createForm').style.display = 'none';
+  reload();
+};
 $('btnRefresh').onclick = reload;
 
 // ---- 操作提示 ----
@@ -234,22 +257,68 @@ $('btnCreateConfirm').onclick = async () => {
   } catch { showMsg('创建失败：网络错误', 'err'); }
 };
 
-// ---- 删除用户（事件委托）----
-$('userRows').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button.del');
-  if (!btn) return;
-  const id = btn.dataset.id;
-  const name = btn.dataset.name;
-  if (!confirm(`确定删除用户「${name}」（ID ${id}）？\n删除后该账号无法再登录，历史对局记录会保留。`)) return;
+// ---- 多选 ----
+function selectedUsers() {
+  return [...$('userRows').querySelectorAll('input.row-chk:checked')].map((el) => ({
+    id: el.dataset.id,
+    name: el.dataset.name,
+  }));
+}
+function syncSelectionUi() {
+  const boxes = [...$('userRows').querySelectorAll('input.row-chk')];
+  const checked = boxes.filter((el) => el.checked);
+  const all = $('chkAll');
+  all.checked = boxes.length > 0 && checked.length === boxes.length;
+  all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+  $('btnBatchDelete').disabled = checked.length === 0;
+  $('btnBatchDelete').textContent = checked.length ? `🗑 删除所选（${checked.length}）` : '🗑 删除所选';
+  boxes.forEach((el) => el.closest('tr')?.classList.toggle('picked', el.checked));
+}
+$('chkAll').addEventListener('change', () => {
+  const on = $('chkAll').checked;
+  $('userRows').querySelectorAll('input.row-chk').forEach((el) => { el.checked = on; });
+  syncSelectionUi();
+});
+$('userRows').addEventListener('change', (e) => {
+  if (e.target.classList.contains('row-chk')) syncSelectionUi();
+});
+$('userRows').addEventListener('click', (e) => {
+  if (e.target.closest('button, input')) return;
+  const chk = e.target.closest('tr')?.querySelector('input.row-chk');
+  if (!chk) return;
+  chk.checked = !chk.checked;
+  syncSelectionUi();
+});
+
+async function deleteUsersByIds(users) {
+  if (!users.length) return;
+  const names = users.map((u) => u.name);
+  const preview = names.length <= 8 ? names.map((n) => `「${n}」`).join('、') : names.slice(0, 8).map((n) => `「${n}」`).join('、') + ` 等 ${names.length} 人`;
+  if (!confirm(`确定删除 ${users.length} 个用户？\n${preview}\n删除后这些账号无法再登录，历史对局记录会保留。`)) return;
   try {
-    const r = await fetch('/api/admin/users?id=' + encodeURIComponent(id), { method: 'DELETE' }).then((x) => x.json());
+    const r = await fetch('/api/admin/users', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: users.map((u) => u.id) }),
+    }).then((x) => x.json());
     if (r.ok) {
-      showMsg(`已删除用户「${name}」`, 'ok');
+      const n = r.deleted?.length ?? users.length;
+      showMsg(`已删除 ${n} 个用户`, 'ok');
+      $('chkAll').checked = false;
       reload();
     } else {
       showMsg('删除失败：' + (r.message || '未知错误'), 'err');
     }
   } catch { showMsg('删除失败：网络错误', 'err'); }
+}
+
+$('btnBatchDelete').onclick = () => deleteUsersByIds(selectedUsers());
+
+// ---- 删除用户（事件委托）----
+$('userRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button.del');
+  if (!btn) return;
+  await deleteUsersByIds([{ id: btn.dataset.id, name: btn.dataset.name }]);
 });
 $('btnPrev').onclick = () => { if (page > 1) { page--; loadList(); } };
 $('btnNext').onclick = () => { page++; loadList(); };

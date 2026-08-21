@@ -118,12 +118,22 @@ class SqliteStore {
 
   /** 删除用户（内存 + SQLite 同步删除，避免重启后复活） */
   deleteUser(id) {
-    delete this.data.users[id];
+    this.deleteUsers([id]);
+  }
+
+  /** 批量删除用户（一条 SQL，同一事务语义） */
+  deleteUsers(ids) {
+    const unique = [...new Set((ids || []).map((id) => String(id)).filter(Boolean))];
+    if (unique.length === 0) return;
+    for (const id of unique) delete this.data.users[id];
     if (!this.db) return;
     try {
-      this.db.prepare('DELETE FROM users WHERE id = ?').run(Number(id));
+      const nums = unique.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+      if (nums.length === 0) return;
+      const placeholders = nums.map(() => '?').join(',');
+      this.db.prepare(`DELETE FROM users WHERE id IN (${placeholders})`).run(...nums);
     } catch (err) {
-      logger.error('store', 'SQLite 删除用户失败', { error: err.message });
+      logger.error('store', 'SQLite 删除用户失败', { error: err.message, count: unique.length });
       throw err;
     }
   }
