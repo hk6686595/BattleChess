@@ -26,3 +26,4 @@ C:\Users\Administrator\Desktop\DeepseekHarnessWork\对战平台\client\XiangqiCl
 C:\Users\Administrator\Desktop\DeepseekHarnessWork\对战平台\client\XiangqiClient\obj\Debug\net10.0-windows7.0\中国象棋在线对战平台.pdb
 C:\Users\Administrator\Desktop\DeepseekHarnessWork\对战平台\client\XiangqiClient\obj\Debug\net10.0-windows7.0\XiangqiClient.genruntimeconfig.cache
 C:\Users\Administrator\Desktop\DeepseekHarnessWork\对战平台\client\XiangqiClient\obj\Debug\net10.0-windows7.0\ref\中国象棋在线对战平台.dll
+C:\Users\Administrator\Desktop\DeepseekHarnessWork\对战平台\client\XiangqiClient\obj\Debug\net10.0-windows7.0\XiangqiClient.sourcelink.json

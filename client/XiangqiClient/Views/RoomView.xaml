@@ -26,11 +26,26 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 棋盘 -->
+            <!-- 棋盘（象棋 / 五子棋按游戏类型切换） -->
             <Border Grid.Column="0" Background="#1b2438" Padding="12" CornerRadius="8" VerticalAlignment="Center">
-                <ctl:XiangqiBoard Game="{Binding Game}" SelectedFrom="{Binding SelectedFrom}"
-                                  BlackPerspective="{Binding IsBlackView}"
-                                  CellClicked="Board_CellClicked"/>
+                <Grid>
+                    <ctl:XiangqiBoard Game="{Binding Game}" SelectedFrom="{Binding SelectedFrom}"
+                                      BlackPerspective="{Binding IsBlackView}"
+                                      CellClicked="Board_CellClicked">
+                        <ctl:XiangqiBoard.Style>
+                            <Style TargetType="ctl:XiangqiBoard">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsGomoku}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ctl:XiangqiBoard.Style>
+                    </ctl:XiangqiBoard>
+                    <ctl:GomokuBoard Game="{Binding Game}" CellClicked="Board_CellClicked"
+                                     Visibility="{Binding IsGomoku, Converter={StaticResource BoolToVisConverter}}"/>
+                </Grid>
             </Border>
 
             <!-- 右侧信息面板 -->

@@ -70,7 +70,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        SoundService.StopLobbyBgm();
+        SoundService.StopBgm();
         try
         {
             // 当前为正式账号且勾选"记住账号"时，更新保存的账号

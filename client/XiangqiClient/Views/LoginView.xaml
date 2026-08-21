@@ -6,9 +6,9 @@
                 Background="#1b2438" CornerRadius="14" Padding="30,26"
                 BorderBrush="#2a3550" BorderThickness="1">
             <StackPanel>
-                <TextBlock Text="⚔️ 对战平台 · 中国象棋" FontSize="24" FontWeight="Bold"
+                <TextBlock Text="⚔️ 对战平台" FontSize="24" FontWeight="Bold"
                            Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                <TextBlock Text="联网对战 · 中国象棋" Foreground="#8b98b5" FontSize="12"
+                <TextBlock Text="联网对战 · 中国象棋 / 五子棋" Foreground="#8b98b5" FontSize="12"
                            HorizontalAlignment="Center" Margin="0,0,0,20"/>
 
                 <!-- 模式切换 -->

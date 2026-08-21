@@ -196,6 +196,61 @@ async function testXiangqiFullGame() {
   b.close();
 }
 
+async function testGomokuFullGame() {
+  console.log('\n[1b] 五子棋完整对局：建房 → 落子 → 五连获胜');
+  const a = new Client();
+  const b = new Client();
+  const userA = await auth(a, { name: randName('五子A'), password: 'pass1234' });
+  const userB = await auth(b, { name: randName('五子B'), password: 'pass1234' });
+
+  a.send('room.create', { gameType: 'gomoku', name: '五子棋测试' });
+  const joinedA = await a.waitFor('s.room.joined');
+  ok('A 创建五子棋房间成功', joinedA.room.gameType === 'gomoku' && joinedA.room.gameName === '五子棋');
+
+  b.send('room.join', { roomId: joinedA.room.id });
+  await b.waitFor('s.room.joined');
+  a.send('room.ready', { ready: true });
+  b.send('room.ready', { ready: true });
+  await sleep(200);
+  a.send('room.start');
+  const startMsg = await a.waitFor('s.game.start');
+  ok('五子棋开局 15×15 空盘', startMsg.game.type === 'gomoku' && startMsg.game.cols === 15
+    && startMsg.game.board.flat().filter(Boolean).length === 0);
+  ok('黑方先手', startMsg.game.turn === 0);
+
+  // 黑连五，白落在无关位置
+  const seq = [
+    [a, { x: 7, y: 7 }],
+    [b, { x: 0, y: 0 }],
+    [a, { x: 8, y: 7 }],
+    [b, { x: 0, y: 1 }],
+    [a, { x: 9, y: 7 }],
+    [b, { x: 0, y: 2 }],
+    [a, { x: 10, y: 7 }],
+    [b, { x: 0, y: 3 }],
+    [a, { x: 11, y: 7 }],
+  ];
+  let over = null;
+  for (let i = 0; i < seq.length; i++) {
+    const [who, pos] = seq[i];
+    who.send('game.move', { move: pos });
+    const msg = await (who === a ? b : a).waitForAny(['s.game.move', 's.game.over']);
+    if (i < seq.length - 1) {
+      ok(`第 ${i + 1} 手 ${pos.x},${pos.y} 广播`, msg.type === 's.game.move' && msg.game.board[pos.y][pos.x]);
+    } else {
+      over = msg.type === 's.game.over' ? msg : await a.waitFor('s.game.over');
+    }
+  }
+  ok('黑方五连获胜', over && over.winnerId === userA.id && over.isDraw === false, JSON.stringify({ winner: over?.winnerId, reason: over?.reason }));
+  ok('结束原因含五子连珠', over?.reason?.includes('五子连珠'));
+  a.send('game.move', { move: { x: 5, y: 5 } });
+  const err = await a.waitFor('s.error');
+  ok('结束后落子被拒绝', err.code === 'INVALID_MOVE');
+
+  a.close();
+  b.close();
+}
+
 async function testMatchmaking() {
   console.log('\n[2] 匹配系统：两个玩家同时匹配 → 自动建房开局');
   const c = new Client();
@@ -337,7 +392,11 @@ async function testChatAndRest() {
     `matches=${matches.matches?.length}`);
 
   const games = await fetch(`${HTTP_URL}/api/games`).then((r) => r.json());
-  ok('REST 游戏列表仅有中国象棋', games.games?.length === 1 && games.games[0].type === 'xiangqi');
+  ok('REST 游戏列表含象棋与五子棋',
+    games.games?.length === 2
+    && games.games.some((g) => g.type === 'xiangqi')
+    && games.games.some((g) => g.type === 'gomoku'),
+    JSON.stringify(games.games?.map((g) => g.type)));
 
   const health = await fetch(`${HTTP_URL}/api/health`).then((r) => r.json());
   ok('REST 健康检查正常', health.ok === true);
@@ -470,6 +529,7 @@ async function main() {
   console.log('====================================');
 
   await testXiangqiFullGame();
+  await testGomokuFullGame();
   await testMatchmaking();
   await testSpectate();
   await testGuestAndDisconnect();

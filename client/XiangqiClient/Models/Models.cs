@@ -65,6 +65,8 @@ public class GameState
     public long TurnStartedAt { get; set; }
     public Move2? LastMove { get; set; }
     public string? Check { get; set; }
+    /// <summary>五子棋连珠高亮（服务端 winLine）</summary>
+    public List<Point2>? WinLine { get; set; }
     public bool Over { get; set; }
     public string? WinnerId { get; set; }
     public bool IsDraw { get; set; }
@@ -180,6 +182,7 @@ public class MatchRecord
     public int Id { get; set; }
     public long Ts { get; set; }
     public string GameType { get; set; } = "xiangqi";
+    public string GameName => GameType == "gomoku" ? "五子棋" : "中国象棋";
     public string Result { get; set; } = "平局"; // 胜 / 负 / 平局
     public int MoveCount { get; set; }
     public string? Reason { get; set; }
@@ -199,7 +202,7 @@ public class MatchRecord
                 "负" => "❌ 负",
                 _ => "➖ 平局",
             };
-            return $"[{time}] {mark} vs {opp}（{MoveCount} 手）{(Reason ?? "")}";
+            return $"[{time}] {mark} {GameName} vs {opp}（{MoveCount} 手）{(Reason ?? "")}";
         }
     }
 }

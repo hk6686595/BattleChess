@@ -17,6 +17,10 @@
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\move.wav" />
     <Resource Include="Assets\capture.wav" />
+    <Resource Include="Assets\select.wav" />
+    <Resource Include="Assets\check.wav" />
+    <Resource Include="Assets\mate.wav" />
+    <Resource Include="Assets\bgm.mp3" />
     <Resource Include="Assets\bgm.wav" />
   </ItemGroup>
 

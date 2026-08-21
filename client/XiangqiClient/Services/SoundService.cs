@@ -6,24 +6,85 @@ using System.Windows.Media;
 namespace XiangqiClient.Services;
 
 /// <summary>
-/// 音效与背景音乐服务。
-/// 走子/吃子音效与背景音乐统一使用 SoundPlayer（WAV），播放稳定可靠；
-/// 若用户放置了 bgm.mp3（如腾讯 QQ 中国象棋原版音乐）在 exe 同目录，则改用 MediaPlayer 循环播放。
-/// 背景音乐来源优先级：exe 同目录 bgm.mp3 → exe 同目录 bgm.wav → 嵌入的占位曲。
-/// 任何播放失败都静默忽略，绝不影响主流程。
+/// 音效与背景音乐。
+/// 走子/吃子/选子/将军用 SoundPlayer（WAV，与 BGM 互不抢通道）；
+/// 背景音乐一律用 MediaPlayer 循环，对局中落子不会打断 BGM。
+///
+/// 覆盖优先级（exe 同目录优先）：
+///   BGM：bgm.mp3 → bgm.wav → 嵌入的录屏提取音频 / 占位曲
+///   音效：move.wav / capture.wav（或 eat.wav）/ check.wav / mate.wav / select.wav → 嵌入资源
 /// </summary>
 public static class SoundService
 {
-    private static readonly SoundPlayer? MoveSound = LoadSound("move.wav");
-    private static readonly SoundPlayer? CaptureSound = LoadSound("capture.wav");
-    private static SoundPlayer? _bgmWav;
-    private static MediaPlayer? _bgmMp3;
-    private static bool _bgmPlaying;
+    private static readonly SoundPlayer? MoveSound = LoadSfx("move.wav");
+    private static readonly SoundPlayer? CaptureSound = LoadSfx("capture.wav", "eat.wav");
+    private static readonly SoundPlayer? CheckSound = LoadSfx("check.wav");
+    private static readonly SoundPlayer? MateSound = LoadSfx("mate.wav");
+    private static readonly SoundPlayer? SelectSound = LoadSfx("select.wav");
 
-    /// <summary>走子/吃子音效（异步播放，支持快速连续触发）</summary>
+    private static MediaPlayer? _bgm;
+    private static bool _bgmPlaying;
+    private static bool _bgmOpening;
+    private static bool _wantBgm;
+
     public static void PlayMove(bool capture)
     {
-        var player = capture ? CaptureSound : MoveSound;
+        Play(capture ? CaptureSound ?? MoveSound : MoveSound);
+    }
+
+    public static void PlayCheck()
+    {
+        Play(CheckSound ?? MoveSound);
+    }
+
+    /// <summary>象棋绝杀：锣鼓式重音，压过普通将军</summary>
+    public static void PlayMate()
+    {
+        Play(MateSound ?? CheckSound ?? MoveSound);
+    }
+
+    public static void PlaySelect()
+    {
+        Play(SelectSound);
+    }
+
+    /// <summary>进入大厅或房间后循环播放背景音乐（已在播则不重开）</summary>
+    public static void StartBgm()
+    {
+        var app = Application.Current;
+        if (app == null) return;
+        if (!app.Dispatcher.CheckAccess())
+        {
+            app.Dispatcher.BeginInvoke(StartBgm);
+            return;
+        }
+        _wantBgm = true;
+        if (_bgmPlaying) return;
+        EnsureBgm();
+        TryPlayBgm();
+    }
+
+    /// <summary>回到登录页或关闭程序时停止背景音乐</summary>
+    public static void StopBgm()
+    {
+        var app = Application.Current;
+        if (app == null) return;
+        if (!app.Dispatcher.CheckAccess())
+        {
+            app.Dispatcher.BeginInvoke(StopBgm);
+            return;
+        }
+        _wantBgm = false;
+        _bgmPlaying = false;
+        try { _bgm?.Stop(); } catch { /* 忽略 */ }
+    }
+
+    /// <summary>兼容旧调用名</summary>
+    public static void StartLobbyBgm() => StartBgm();
+    public static void StopLobbyBgm() => StopBgm();
+
+    private static void Play(SoundPlayer? player)
+    {
         if (player == null) return;
         try
         {
@@ -33,105 +94,107 @@ public static class SoundService
         catch { /* 播放失败忽略 */ }
     }
 
-    /// <summary>进入大厅：开始循环播放背景音乐（重复调用不会重新起播）</summary>
-    public static void StartLobbyBgm()
-    {
-        var app = Application.Current;
-        if (app == null || _bgmPlaying) return;
-        if (!app.Dispatcher.CheckAccess())
-        {
-            app.Dispatcher.BeginInvoke(new Action(StartLobbyBgm));
-            return;
-        }
-        EnsureBgm();
-        if (_bgmMp3 != null)
-        {
-            try { _bgmMp3.Play(); _bgmPlaying = true; }
-            catch { _bgmPlaying = false; }
-        }
-        else if (_bgmWav != null)
-        {
-            try { _bgmWav.PlayLooping(); _bgmPlaying = true; }
-            catch { _bgmPlaying = false; }
-        }
-    }
-
-    /// <summary>离开大厅（进入房间/退出登录/关闭程序）：停止背景音乐</summary>
-    public static void StopLobbyBgm()
-    {
-        var app = Application.Current;
-        if (app == null || !_bgmPlaying) return;
-        if (!app.Dispatcher.CheckAccess())
-        {
-            app.Dispatcher.BeginInvoke(new Action(StopLobbyBgm));
-            return;
-        }
-        _bgmPlaying = false;
-        try { _bgmWav?.Stop(); } catch { /* 忽略 */ }
-        try { _bgmMp3?.Stop(); } catch { /* 忽略 */ }
-    }
-
     private static void EnsureBgm()
     {
-        if (_bgmWav != null || _bgmMp3 != null) return;
+        if (_bgm != null || _bgmOpening) return;
         var dir = AppContext.BaseDirectory;
+        foreach (var name in new[] { "bgm.mp3", "bgm.wav" })
+        {
+            var path = Path.Combine(dir, name);
+            if (File.Exists(path) && OpenBgm(new Uri(path))) return;
+        }
+        foreach (var name in new[] { "bgm.mp3", "bgm.wav" })
+        {
+            var embedded = ExtractResourceToTemp(name);
+            if (embedded != null && OpenBgm(new Uri(embedded))) return;
+        }
+    }
 
-        // 1) exe 同目录 bgm.mp3（可放腾讯 QQ 中国象棋原版音乐）→ MediaPlayer 循环
-        var mp3 = Path.Combine(dir, "bgm.mp3");
-        if (File.Exists(mp3))
+    private static bool OpenBgm(Uri uri)
+    {
+        try
+        {
+            var mp = new MediaPlayer { Volume = 0.46 };
+            mp.MediaEnded += (_, _) =>
+            {
+                try
+                {
+                    mp.Stop();
+                    mp.Position = TimeSpan.Zero;
+                    mp.Play();
+                }
+                catch { /* 忽略 */ }
+            };
+            mp.MediaFailed += (_, _) =>
+            {
+                try { mp.Close(); } catch { /* 忽略 */ }
+                if (ReferenceEquals(_bgm, mp)) _bgm = null;
+                _bgmPlaying = false;
+                _bgmOpening = false;
+            };
+            mp.MediaOpened += (_, _) =>
+            {
+                _bgmOpening = false;
+                if (_wantBgm) TryPlayBgm();
+            };
+            _bgmOpening = true;
+            mp.Open(uri);
+            _bgm = mp;
+            return true;
+        }
+        catch
+        {
+            _bgmOpening = false;
+            _bgm = null;
+            return false;
+        }
+    }
+
+    private static void TryPlayBgm()
+    {
+        if (_bgm == null) return;
+        try
+        {
+            _bgm.Play();
+            _bgmPlaying = true;
+        }
+        catch { _bgmPlaying = false; }
+    }
+
+    private static string? ExtractResourceToTemp(string name)
+    {
+        try
+        {
+            var src = Application.GetResourceStream(new Uri($"pack://application:,,,/assets/{name}"))?.Stream;
+            if (src == null) return null;
+            var dest = Path.Combine(Path.GetTempPath(), "BattlePlatform_" + name);
+            using (src)
+            using (var fs = File.Create(dest))
+                src.CopyTo(fs);
+            return dest;
+        }
+        catch { return null; }
+    }
+
+    private static SoundPlayer? LoadSfx(params string[] names)
+    {
+        var dir = AppContext.BaseDirectory;
+        foreach (var name in names)
+        {
+            var path = Path.Combine(dir, name);
+            if (!File.Exists(path)) continue;
+            try { return new SoundPlayer(path); }
+            catch { /* 尝试下一个 */ }
+        }
+        foreach (var name in names)
         {
             try
             {
-                var mp = new MediaPlayer { Volume = 0.5 };
-                mp.MediaEnded += (_, _) => { mp.Position = TimeSpan.Zero; mp.Play(); };
-                mp.MediaFailed += (_, _) =>
-                {
-                    try { mp.Close(); } catch { /* 忽略 */ }
-                    _bgmMp3 = null;
-                    _bgmWav = LoadEmbeddedBgm();   // 回退到内置占位曲
-                    if (_bgmPlaying) TryPlayWav();
-                };
-                mp.Open(new Uri(mp3));
-                _bgmMp3 = mp;
-                return;
+                var stream = Application.GetResourceStream(new Uri($"pack://application:,,,/assets/{name}"))?.Stream;
+                if (stream != null) return new SoundPlayer(stream);
             }
-            catch { _bgmMp3 = null; }
+            catch { /* 尝试下一个 */ }
         }
-
-        // 2) exe 同目录 bgm.wav → SoundPlayer 循环
-        var wav = Path.Combine(dir, "bgm.wav");
-        if (File.Exists(wav))
-        {
-            try { _bgmWav = new SoundPlayer(wav); return; }
-            catch { _bgmWav = null; }
-        }
-
-        // 3) 嵌入资源占位曲 → SoundPlayer 循环
-        _bgmWav = LoadEmbeddedBgm();
-    }
-
-    private static void TryPlayWav()
-    {
-        try { _bgmWav?.PlayLooping(); } catch { /* 忽略 */ }
-    }
-
-    private static SoundPlayer? LoadEmbeddedBgm()
-    {
-        try
-        {
-            var stream = Application.GetResourceStream(new Uri("pack://application:,,,/assets/bgm.wav"))?.Stream;
-            return stream == null ? null : new SoundPlayer(stream);
-        }
-        catch { return null; }
-    }
-
-    private static SoundPlayer? LoadSound(string name)
-    {
-        try
-        {
-            var stream = Application.GetResourceStream(new Uri($"pack://application:,,,/assets/{name}"))?.Stream;
-            return stream == null ? null : new SoundPlayer(stream);
-        }
-        catch { return null; }
+        return null;
     }
 }

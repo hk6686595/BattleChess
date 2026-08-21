@@ -94,15 +94,17 @@ export const REQ = {
   MATCHES_GET: 'matches.get', // 查询个人历史对局 { userId? }
 };
 
-/** 可创建房间的游戏类型（当前仅中国象棋） */
+/** 可创建房间的游戏类型 */
 export const GAME_TYPES = {
   XIANGQI: 'xiangqi',
+  GOMOKU: 'gomoku',
 };
 
 export const GAME_NAMES = {
   [GAME_TYPES.XIANGQI]: '中国象棋',
+  [GAME_TYPES.GOMOKU]: '五子棋',
 };
 
 export function isValidGameType(type) {
-  return type === GAME_TYPES.XIANGQI;
+  return type === GAME_TYPES.XIANGQI || type === GAME_TYPES.GOMOKU;
 }

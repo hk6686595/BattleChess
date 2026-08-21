@@ -13,9 +13,11 @@
  *   parseMove(raw)    校验并规范化 move
  */
 import * as xiangqi from './xiangqi.js';
+import * as gomoku from './gomoku.js';
 
 export const games = {
   xiangqi,
+  gomoku,
 };
 
 export function getGame(type) {

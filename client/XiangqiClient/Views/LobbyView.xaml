@@ -5,7 +5,7 @@
         <!-- 顶栏 -->
         <Border DockPanel.Dock="Top" Background="#1b2438" Padding="12,8" BorderBrush="#2a3550" BorderThickness="0,0,0,1">
             <DockPanel>
-                <TextBlock Text="⚔️ 对战平台 · 中国象棋" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="⚔️ 对战平台 · 象棋 / 五子棋" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 <TextBlock Text="{Binding ConnectText}" Foreground="#37d67a" Margin="16,0,0,0" VerticalAlignment="Center"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <TextBlock Text="{Binding UserBar}" Foreground="#e6ecf5" VerticalAlignment="Center" Margin="0,0,12,0"/>
@@ -30,7 +30,15 @@
 
                 <Border Grid.Row="0" Background="#1b2438" Padding="12" CornerRadius="8" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="🎮 中国象棋" FontSize="14" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <TextBlock Text="🎮 选择游戏" FontSize="14" FontWeight="Bold" Foreground="#e6ecf5" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <RadioButton Content="♟️ 中国象棋" GroupName="LobbyGame"
+                                         IsChecked="{Binding IsXiangqiSelected}" Margin="0,0,20,0"
+                                         Foreground="#e6ecf5" FontSize="14" VerticalAlignment="Center"/>
+                            <RadioButton Content="⚪ 五子棋" GroupName="LobbyGame"
+                                         IsChecked="{Binding IsGomokuSelected}"
+                                         Foreground="#e6ecf5" FontSize="14" VerticalAlignment="Center"/>
+                        </StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -84,6 +92,7 @@
                                             <TextBlock DockPanel.Dock="Right" Text="{Binding Meta}" Foreground="#8b98b5" VerticalAlignment="Center"/>
                                             <TextBlock DockPanel.Dock="Right" Text="{Binding Lock}" Foreground="#ffd54a" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                             <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding GameName}" Foreground="#4f8cff" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <TextBlock Text="{Binding StatusText}" Foreground="#ffb74d" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <TextBlock Text="{Binding Name}" Foreground="#e6ecf5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>

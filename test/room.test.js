@@ -161,6 +161,52 @@ async function main() {
     ok('悔棋后电脑重新走子', !!aiMove2, JSON.stringify(aiMove2?.msg?.move));
   }
 
+  console.log('[6] 五子棋房间：建房 → 落子 → 五连结束');
+  {
+    sent.length = 0;
+    rooms.leaveRoom('u1');
+    rooms.leaveRoom('u2');
+    const c = rooms.createRoom(userA, { gameType: 'gomoku' });
+    ok('创建五子棋房间', c.ok === true && c.room.gameType === 'gomoku', JSON.stringify(c));
+    rooms.joinRoom(userB, c.room.id);
+    rooms.setReady('u1', true);
+    rooms.setReady('u2', true);
+    rooms.startGame('u1');
+    ok('五子棋对局开始', lastEvent('s.game.start')?.game?.type === 'gomoku');
+
+    const seq = [
+      ['u1', 7, 7], ['u2', 0, 0],
+      ['u1', 8, 7], ['u2', 0, 1],
+      ['u1', 9, 7], ['u2', 0, 2],
+      ['u1', 10, 7], ['u2', 0, 3],
+      ['u1', 11, 7],
+    ];
+    let last = null;
+    for (const [uid, x, y] of seq) last = rooms.applyMove(uid, { x, y });
+    ok('黑方五连房间层判胜', last.ok === true, JSON.stringify(last));
+    const over = lastEvent('s.game.over');
+    ok('广播 GAME_OVER', !!over && over.winnerId === 'u1', JSON.stringify(over));
+    ok('原因含五子连珠', over?.reason?.includes('五子连珠'));
+  }
+
+  console.log('[7] 五子棋人机：玩家落子后电脑回应');
+  {
+    sent.length = 0;
+    rooms.leaveRoom('u1');
+    const c = rooms.createRoom(userA, { gameType: 'gomoku', vsAI: true });
+    ok('创建五子棋人机房', c.ok === true && c.room.mode === 'ai');
+    rooms.setReady('u1', true);
+    rooms.startGame('u1');
+    rooms.applyMove('u1', { x: 7, y: 7 });
+    let aiMove = null;
+    for (let i = 0; i < 40 && !aiMove; i++) {
+      aiMove = [...sent].reverse().find((e) => e.msg.type === 's.game.move' && e.msg.playerId === '__ai__');
+      if (!aiMove) await sleep(50);
+    }
+    ok('五子棋电脑自动落子', !!aiMove, JSON.stringify(aiMove?.msg?.move));
+    ok('电脑落在空点', aiMove?.msg?.move?.x !== 7 || aiMove?.msg?.move?.y !== 7);
+  }
+
   console.log(`\n房间层测试：通过 ${passed} 项，失败 ${failed} 项`);
   process.exit(failed === 0 ? 0 : 1);
 }

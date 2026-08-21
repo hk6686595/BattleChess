@@ -20,8 +20,8 @@ public class MainViewModel : ViewModelBase
         _conn.StatusChanged += OnStatusChanged;
 
         CreateRoomCmd = new RelayCommand(_ => CreateRoom(), _ => CanAction);
-        StartAiCmd = new RelayCommand(async _ => await _conn.SendAsync("room.create", new { gameType = "xiangqi", vsAI = true }), _ => CanAction);
-        QuickJoinCmd = new RelayCommand(async _ => await _conn.SendAsync("room.quickJoin", new { gameType = "xiangqi" }), _ => CanAction);
+        StartAiCmd = new RelayCommand(async _ => await _conn.SendAsync("room.create", new { gameType = SelectedGameType, vsAI = true }), _ => CanAction);
+        QuickJoinCmd = new RelayCommand(async _ => await _conn.SendAsync("room.quickJoin", new { gameType = SelectedGameType }), _ => CanAction);
         // 匹配模式暂未开放（开发中）：按钮永久禁用，点击无响应。
         // 保留 ToggleMatch 与 match.enqueue/dequeue 协议，后期恢复时把 CanExecute 改回 _ => Room == null 即可。
         MatchCmd = new RelayCommand(_ => ToggleMatch(), _ => false);
@@ -55,9 +55,9 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsLobby));
                 OnPropertyChanged(nameof(IsLogin));
                 OnPropertyChanged(nameof(IsRoom));
-                // 进入大厅播放背景音乐，离开大厅（进房间/退出登录）停止
-                if (IsLobby) SoundService.StartLobbyBgm();
-                else SoundService.StopLobbyBgm();
+                // 大厅与对局房间都播放背景音乐，仅登录页停止
+                if (IsLogin) SoundService.StopBgm();
+                else SoundService.StartBgm();
             }
         }
     }
@@ -233,6 +233,9 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(RoomTitle));
                 OnPropertyChanged(nameof(ReadyButtonText));
                 OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(IsGomoku));
+                OnPropertyChanged(nameof(IsXiangqi));
+                OnPropertyChanged(nameof(IsBlackView));
             }
         }
     }
@@ -261,6 +264,32 @@ public class MainViewModel : ViewModelBase
     private bool _roomPrivateInput;
     public bool RoomPrivateInput { get => _roomPrivateInput; set => Set(ref _roomPrivateInput, value); }
 
+    private string _selectedGameType = "xiangqi";
+    public string SelectedGameType
+    {
+        get => _selectedGameType;
+        set
+        {
+            if (Set(ref _selectedGameType, value))
+            {
+                OnPropertyChanged(nameof(SelectedGameLabel));
+                OnPropertyChanged(nameof(IsXiangqiSelected));
+                OnPropertyChanged(nameof(IsGomokuSelected));
+            }
+        }
+    }
+    public string SelectedGameLabel => SelectedGameType == "gomoku" ? "五子棋" : "中国象棋";
+    public bool IsXiangqiSelected
+    {
+        get => SelectedGameType != "gomoku";
+        set { if (value) SelectedGameType = "xiangqi"; }
+    }
+    public bool IsGomokuSelected
+    {
+        get => SelectedGameType == "gomoku";
+        set { if (value) SelectedGameType = "gomoku"; }
+    }
+
     private string _lobbyChatInput = "";
     public string LobbyChatInput { get => _lobbyChatInput; set => Set(ref _lobbyChatInput, value); }
     private string _roomChatInput = "";
@@ -284,6 +313,8 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(InPlayingGame));
                 OnPropertyChanged(nameof(PlayersInfo));
                 OnPropertyChanged(nameof(IsBlackView));
+                OnPropertyChanged(nameof(IsGomoku));
+                OnPropertyChanged(nameof(IsXiangqi));
                 RebuildMoveList();
                 ResetTurnCountdown();
                 PlayMoveSound(prev, value);
@@ -292,35 +323,58 @@ public class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 走子/吃子音效：仅当步数恰好增加一步时触发，
+    /// 走子/吃子/将军音效：仅当步数恰好增加一步时触发，
     /// 开局、悔棋、重开、中途进房（步数跳变）等场景不响。
+    /// 最后一手（将死/五连）同样播放，避免胜利步静音。
     /// </summary>
     private static void PlayMoveSound(GameState? prev, GameState? next)
     {
-        if (prev == null || next == null || next.Over) return;
+        if (prev == null || next == null) return;
         var addedMoves = next.Moves.Count - prev.Moves.Count;
         var addedCount = next.MoveCount - prev.MoveCount;
         if (addedMoves != 1 && addedCount != 1) return;
-        // 目标格原本有子（即吃子）→ 用更沉闷的吃子音效
         var last = next.LastMove;
         var captured = last != null && GetPiece(prev, last.To) != null;
-        SoundService.PlayMove(captured);
+        // 象棋绝杀（含吃将）用独立重音，不能跟普通将军混在一起
+        if (next.Over && !next.IsDraw && next.Type != "gomoku"
+            && (next.Reason?.Contains("绝杀") == true || next.Reason?.Contains("吃掉对方") == true))
+        {
+            SoundService.PlayMate();
+            return;
+        }
+        var justChecked = !string.IsNullOrEmpty(next.Check) && next.Check != prev.Check;
+        if (justChecked) SoundService.PlayCheck();
+        else SoundService.PlayMove(captured);
     }
 
     /// <summary>
     /// 黑方视角：棋盘镜像翻转，黑方棋子显示在屏幕下方。
-    /// 服务器约定 players[0] 恒为红方；观战者不在 players 中，保持红方视角。
+    /// 服务器约定 players[0] 恒为红方（象棋）/ 黑方（五子棋）；
+    /// 五子棋双方共用同一棋盘方向，不翻转。观战者保持默认视角。
     /// </summary>
     public bool IsBlackView
     {
         get
         {
+            if (IsGomoku) return false;
             if (Game == null || User == null) return false;
             if (Game.Players.Count < 2) return false;                       // 人机等单边场景不翻转
             if (!Game.Players.Any(p => p.Id == User.Id)) return false;      // 观战者保持红方视角
             return Game.Players[0].Id != User.Id;                            // 我是黑方才翻转
         }
     }
+
+    /// <summary>当前房间/对局是否为五子棋</summary>
+    public bool IsGomoku => (Game?.Type ?? Room?.GameType) == "gomoku";
+    public bool IsXiangqi => !IsGomoku;
+
+    private string SideMark(int index) => IsGomoku
+        ? (index == 0 ? "⚫黑" : "⚪白")
+        : (index == 0 ? "🔴红" : "⚫黑");
+
+    private string SideName(int turn) => IsGomoku
+        ? (turn == 0 ? "黑方" : "白方")
+        : (turn == 0 ? "红方" : "黑方");
 
     // ---------------- 棋谱 ----------------
 
@@ -332,8 +386,8 @@ public class MainViewModel : ViewModelBase
         for (int i = 0; i < Game.Moves.Count; i++)
         {
             var m = Game.Moves[i];
-            var isRed = m.Player == redId;
-            m.Display = $"第{i + 1}手　{(isRed ? "🔴红" : "⚫黑")}　{m.Notation}";
+            var isFirst = m.Player == redId;
+            m.Display = $"第{i + 1}手　{SideMark(isFirst ? 0 : 1)}　{m.Notation}";
             MoveList.Add(m);
         }
     }
@@ -362,7 +416,7 @@ public class MainViewModel : ViewModelBase
             {
                 return "🤖 电脑思考中";
             }
-            var color = Game.Turn == 0 ? "红方" : "黑方";
+            var color = SideName(Game.Turn);
             return $"⏱ {color} {Math.Max(0, TurnRemaining)} 秒";
         }
     }
@@ -437,8 +491,8 @@ public class MainViewModel : ViewModelBase
             {
                 return "🤖 电脑思考中…";
             }
-            var color = Game.Turn == 0 ? "红方" : "黑方";
-            var check = Game.Check != null ? "（将军！）" : "";
+            var color = SideName(Game.Turn);
+            var check = !IsGomoku && Game.Check != null ? "（将军！）" : "";
             var mine = player?.Id == User?.Id;
             return $"{(mine ? "轮到你了" : $"等待 {player?.Name}")} · {color}走棋{check}";
         }
@@ -461,7 +515,7 @@ public class MainViewModel : ViewModelBase
         get
         {
             if (Game == null) return "";
-            return string.Join("　", Game.Players.Select((p, i) => $"{(i == 0 ? "🔴红" : "⚫黑")} {p.Name}"));
+            return string.Join("　", Game.Players.Select((p, i) => $"{SideMark(i)} {p.Name}"));
         }
     }
 
@@ -675,7 +729,7 @@ public class MainViewModel : ViewModelBase
     {
         await _conn.SendAsync("room.create", new
         {
-            gameType = "xiangqi",
+            gameType = SelectedGameType,
             name = RoomNameInput.Trim(),
             password = string.IsNullOrEmpty(RoomPasswordInput) ? null : RoomPasswordInput,
             @private = RoomPrivateInput,
@@ -731,14 +785,25 @@ public class MainViewModel : ViewModelBase
         RoomChatInput = "";
     }
 
-    /// <summary>棋盘点击：第一步选中，第二步走子</summary>
+    /// <summary>棋盘点击：象棋选子再走；五子棋直接在空点落子</summary>
     private async void OnCellClick(Point2 cell)
     {
         if (Game == null || Game.Over || !MyTurn) return;
+        if (IsGomoku)
+        {
+            var occupied = GetPiece(Game, cell);
+            if (occupied != null) return;
+            await _conn.SendAsync("game.move", new { move = new { x = cell.X, y = cell.Y } });
+            return;
+        }
         var piece = GetPiece(Game, cell);
         if (SelectedFrom == null)
         {
-            if (piece != null && IsMyPiece(piece)) SelectedFrom = cell;
+            if (piece != null && IsMyPiece(piece))
+            {
+                SelectedFrom = cell;
+                SoundService.PlaySelect();
+            }
             return;
         }
         var from = SelectedFrom;
@@ -1005,7 +1070,7 @@ public class MainViewModel : ViewModelBase
         Ui(() =>
         {
             SetGame(ExtractGame(payload));
-            StatusText = "对局开始！红方先行";
+            StatusText = IsGomoku ? "对局开始！黑方先行" : "对局开始！红方先行";
         });
     }
 

@@ -11,7 +11,8 @@
 import crypto from 'node:crypto';
 import { ERR, EVT, GAME_TYPES, isValidGameType } from '../net/protocol.js';
 import { getGame, listGameTypes } from '../games/index.js';
-import { bestMove } from '../games/xiangqi-ai.js';
+import { bestMove as xiangqiBestMove } from '../games/xiangqi-ai.js';
+import { bestMove as gomokuBestMove } from '../games/gomoku-ai.js';
 import { ucciEngine } from '../games/uci-engine.js';
 import { config } from '../config.js';
 import * as userApi from './user.js';
@@ -117,7 +118,7 @@ export class RoomManager {
 
   /** 创建房间（vsAI=true 时为单人模式，自动加入电脑玩家） */
   createRoom(user, opts = {}) {
-    const gameType = opts.gameType || GAME_TYPES.GOMOKU;
+    const gameType = opts.gameType || GAME_TYPES.XIANGQI;
     if (!isValidGameType(gameType)) {
       return { error: ERR.BAD_REQUEST, message: '未知的游戏类型' };
     }
@@ -598,43 +599,54 @@ export class RoomManager {
     }
   }
 
-  /** 电脑走一步棋（优先 eleeye 引擎，失败回退内置 AI） */
+  /** 电脑走一步棋（象棋优先 eleeye，五子棋用启发式 AI） */
   async _aiMove(room) {
     const cur = this.rooms.get(room.id);
     if (!cur || !cur.game || cur.game.over || cur.status !== 'playing') return;
     if (cur.game.players[cur.game.turn]?.id !== cur.aiId) return;
 
     const game = getGame(cur.gameType);
-    const aiColor = cur.game.turn === 0 ? 'r' : 'b';
     const started = Date.now();
-
-    // 1) 尝试 eleeye（象眼）引擎（side = 当前走棋方）
     let move = null;
-    try {
-      move = await ucciEngine.getBestMove(cur.game.board, aiColor, config.aiThinkMs);
-    } catch (err) {
-      logger.warn('game', '引擎调用异常，回退内置 AI', { roomId: cur.id, error: err.message });
-    }
-
-    // 2) 应用引擎走法；若被拒（理论上不应发生）则回退内置 AI 兜底，避免电脑卡住
     let result = null;
-    if (move) {
-      result = game.applyMove(cur.game, cur.aiId, move);
-      if (!result.ok) {
-        logger.warn('game', '引擎走法被拒，回退内置 AI', { roomId: cur.id, move, error: result.error });
-        move = null;
-      }
-    }
-    if (!move) {
-      move = bestMove(cur.game.board, aiColor, 3);
+    let engineName = 'builtin';
+
+    if (cur.gameType === 'gomoku') {
+      const aiColor = cur.game.turn === 0 ? 'b' : 'w';
+      move = gomokuBestMove(cur.game.board, aiColor);
       if (move) result = game.applyMove(cur.game, cur.aiId, move);
+      engineName = 'gomoku-ai';
+    } else {
+      const aiColor = cur.game.turn === 0 ? 'r' : 'b';
+      // 1) 尝试 eleeye（象眼）引擎（side = 当前走棋方）
+      try {
+        move = await ucciEngine.getBestMove(cur.game.board, aiColor, config.aiThinkMs);
+      } catch (err) {
+        logger.warn('game', '引擎调用异常，回退内置 AI', { roomId: cur.id, error: err.message });
+      }
+
+      // 2) 应用引擎走法；若被拒（理论上不应发生）则回退内置 AI 兜底，避免电脑卡住
+      if (move) {
+        result = game.applyMove(cur.game, cur.aiId, move);
+        if (!result.ok) {
+          logger.warn('game', '引擎走法被拒，回退内置 AI', { roomId: cur.id, move, error: result.error });
+          move = null;
+        } else {
+          engineName = 'eleeye';
+        }
+      }
+      if (!move) {
+        move = xiangqiBestMove(cur.game.board, aiColor, 3);
+        if (move) result = game.applyMove(cur.game, cur.aiId, move);
+        engineName = 'xiangqi-ai';
+      }
     }
     if (!result || !result.ok) {
       logger.warn('game', '电脑无合法走法', { roomId: cur.id });
       return;
     }
     const cost = Date.now() - started;
-    logger.info('game', '电脑走子', { roomId: cur.id, move, notation: cur.game.lastMove?.notation, ms: cost, engine: 'eleeye' });
+    logger.info('game', '电脑走子', { roomId: cur.id, move, notation: cur.game.lastMove?.notation, ms: cost, engine: engineName });
 
     if (result.gameOver) {
       this._finishGame(cur, result);
